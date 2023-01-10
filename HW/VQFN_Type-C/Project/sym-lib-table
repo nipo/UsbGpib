@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name "conn-gpib")(type "KiCad")(uri "${KIPRJMOD}/symbols/SamacSys_Parts.kicad_sym")(options "")(descr ""))
+)
