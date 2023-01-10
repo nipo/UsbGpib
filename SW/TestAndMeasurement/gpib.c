@@ -491,52 +491,48 @@ static bool is_timedout(void)
 
 uint8_t gpib_search(void)
 {
-	uint8_t addr, foundaddr;
+	int8_t addr;
+	uint8_t foundaddr;
 	
 	timeout_start(500);
 	gpib_tx(0x3F, true, is_timedout); // UNL
 	
 	foundaddr = 255;
-	addr = 255;
-	do
+
+	for (addr = 0x3e; addr >= 0; --addr)
 	{
-	
-		addr++;
-		if ((addr & 0x1f) != 31)
-		{
-			timeout_start(500);
-			gpib_cmd_LAG(addr, is_timedout);
+		if ((addr & 0x1f) == 0x1f)
+			continue;
+
+		timeout_start(500);
+		gpib_cmd_LAG(addr, is_timedout);
 			
-			ATN_HIGH; /* make ATN H */
-			_delay_ms(2);
-			if ( (NDAC_STATE == 0) && (ATN_STATE != 0))
-			{
-				foundaddr = addr;
-			}
+		ATN_HIGH; /* make ATN H */
+		_delay_ms(2);
+		if ((NDAC_STATE == 0) && (ATN_STATE != 0))
+		{
+			foundaddr = addr;
+			break;
 		}
-		
 	}
-	while ( (addr < 63) && (foundaddr == 255));
 	
 	timeout_start(500);
 	gpib_tx(0x3F, true, is_timedout); // UNL
-	
+
 	/* if the device needs a secondary address, ensure, that it really cannot be addressed without secondary address */
-	if (addr >= 32)
+	if (addr & 0x20)
 	{
 		/* address once without SA. If it responds, force it to this primary addressing only! */
 		gpib_cmd_LAG(addr & 0x1f, is_timedout);
 		ATN_HIGH; /* make ATN H */
 		_delay_ms(2);
-		if ( (NDAC_STATE == 0) && (ATN_STATE != 0))
+		if ((NDAC_STATE == 0) && (ATN_STATE != 0))
 		{
 			foundaddr = addr & 0x1f;
 		}
 		timeout_start(500);
 		gpib_tx(0x3F, true, is_timedout); // UNL
 	}
-	
-	//return 1;
 		
 	return foundaddr;
 }
