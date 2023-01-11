@@ -197,112 +197,89 @@ bool findGpibdevice(void)
 	return devicepresent;
 }
 
-/* returns TRUE, if a string was received over GPIB */
-bool identifyGpibDevice(void)
+bool useResponseAsSn(const char *command)
 {
-	uint8_t c, len, hascomma;
+	uint8_t c;
+    uint8_t len = 0;
 	bool    eoi, timedout;
-	bool    gotStringViaGPIB;
-	
-	gotStringViaGPIB = true;
-	
-	hascomma = false; /* does the response contain a , character? */
+	bool    gotStringViaGPIB = true;
+    uint8_t spacesLeft = 3;
 
 	tmc_serial_string.Header.Size = 0;
 
 	timeout_start(100000); /* 1s timeout*/
 	gpib_make_listener(gpib_addr, is_timedout);
-	if (timeout_val != 0) gpib_writedat('*', false, is_timedout);
-	if (timeout_val != 0) gpib_writedat('I', false, is_timedout);
-	if (timeout_val != 0) gpib_writedat('D', false, is_timedout);
-	if (timeout_val != 0) gpib_writedat('N', false, is_timedout);
-	if (timeout_val != 0) gpib_writedat('?', false, is_timedout);
-	if (timeout_val != 0) gpib_writedat('\n', true, is_timedout);
+
+    while (*command) {
+        if (timeout_val)
+            gpib_writedat(*command, false, is_timedout);
+        command++;
+    }
 	gpib_untalk_unlisten(is_timedout);
 	
-	if (timeout_val != 0) 
-	{
-		timeout_start(100000); /* 1s timeout*/
-		gpib_make_talker(gpib_addr, is_timedout);
-		len = 0;
-		do
-		{
-			c = gpib_readdat(&eoi, &timedout, is_timedout);
-			hascomma = hascomma || (c == ',');
-			if ( (c=='\"') || (c=='*') || (c=='/') || (c=='\\') || (c==':') || (c=='?') || (c==' ') || (c==',') || (c=='&') ) /* YEP, a comma and amphersand is allowed in USBTMC spec, but R&S SW does not like this... */
-				c='_';
-			if ( (c >=32) && (c <=126))
-				tmc_serial_string.UnicodeString[len++] = cpu_to_le16(c);
-		}
-		while ((len < TMC_MAX_SERIAL_STRING_LENGTH) && (!timedout) && (!eoi));
-		/* strip away spaces at end */
-		while ((tmc_serial_string.UnicodeString[len-1] == '_') && (len > 1))
-			len--;
-		tmc_serial_string.Header.Size = len*2 + sizeof(USB_Descriptor_Header_t);
+	if (!timeout_val)
+        return false;
+
+    timeout_start(100000); /* 1s timeout*/
+    gpib_make_talker(gpib_addr, is_timedout);
+
+    do
+    {
+        c = gpib_readdat(&eoi, &timedout, is_timedout);
+
+         /* YEP, a comma and amphersand is allowed in USBTMC spec, but R&S SW does not like this... */
+        if ((c=='\"') || (c=='*') || (c=='/') || (c=='\\') || (c==':') || (c=='?') || (c==' ') || (c==',') || (c=='&'))
+            c='_';
+
+        if (c == '_')
+            spacesLeft--;
+        else
+            spacesLeft = 3;
+
+        if (spacesLeft == 0)
+            break;
+        
+        if ( (c >=32) && (c <=126))
+            tmc_serial_string.UnicodeString[len++] = cpu_to_le16(c);
+    }
+    while ((len < TMC_MAX_SERIAL_STRING_LENGTH) && (!timedout) && (!eoi));
+
+    /* strip away spaces at end */
+    while ((tmc_serial_string.UnicodeString[len-1] == '_') && (len > 1))
+        len--;
 		
-		gpib_untalk_unlisten(is_timedout);
-		
-		if ( (timeout_val == 0) || (len==0) ) /* no response to *IDN? string*/
-		{ /* so try out ID? query */
-			timeout_start(100000); /* 1s timeout*/
-			gpib_make_listener(gpib_addr, is_timedout);
-			if (timeout_val != 0) gpib_writedat('I', false, is_timedout);
-			if (timeout_val != 0) gpib_writedat('D', false, is_timedout);
-			if (timeout_val != 0) gpib_writedat('?', false, is_timedout);
-			if (timeout_val != 0) gpib_writedat('\n', true, is_timedout);
-			gpib_untalk_unlisten(is_timedout);
-			if (timeout_val != 0) 
-			{
-				timeout_start(100000); /* 1s timeout*/
-				gpib_make_talker(gpib_addr, is_timedout);
-				len = 0;
-				do
-				{
-					c = gpib_readdat(&eoi, &timedout, is_timedout);
-					hascomma = hascomma || (c == ',');
-					if ( (c=='\"') || (c=='*') || (c=='/') || (c=='\\') || (c==':') || (c=='?') || (c==' ') || (c==',') || (c=='&'))
-						c='_';
-					if ( (c >=32) && (c <=126) )
-						tmc_serial_string.UnicodeString[len++] = cpu_to_le16(c);
-				}
-				while ((len < TMC_MAX_SERIAL_STRING_LENGTH) && (!timedout) && (!eoi) && (c != '\r') && (c != '\n'));
-				/* strip away spaces at end */
-				while ((tmc_serial_string.UnicodeString[len-1] == '_') && (len > 1))
-					len--;
-				tmc_serial_string.Header.Size = len*2 + sizeof(USB_Descriptor_Header_t);
-				gpib_untalk_unlisten(is_timedout);
-			}				
-		}
-		
-		
-		if (!hascomma)
-			if ( (tmc_serial_string.UnicodeString[0] = 'H') &&
-				 (tmc_serial_string.UnicodeString[1] = 'P') &&
-				 (tmc_serial_string.UnicodeString[2] >= '0') &&
-				 (tmc_serial_string.UnicodeString[2] <= '9')     )
-			{
-				hascomma = true;
-			}
-		
-		
-		if ((timeout_val == 0) || (len == 0)  || (!hascomma) ) /* timeout happened or length is 0 => build a serial number based on GPIB address */
-		{
-			TMC_SetInternalSerial(true);
-			gotStringViaGPIB = false;
-		}
-	}
-	else
-	{ /* no gpib address found => use normal serial number */
+    gpib_untalk_unlisten(is_timedout);
+
+    if (!timeout_val || !len)
+        return false;
+    
+    tmc_serial_string.Header.Size = len*2 + sizeof(USB_Descriptor_Header_t);
+
+    return true;
+}
+
+/* returns TRUE, if a string was received over GPIB */
+bool identifyGpibDevice(void)
+{
+    bool ok;
+
+    ok = useResponseAsSn("SI\r\n");
+
+    if (!ok)
+        ok = useResponseAsSn("*IDN?\n");
+
+    if (!ok)
+        ok = useResponseAsSn("ID?\n");
+
+    /* no gpib address found => use normal serial number */
+	if (!ok)
 		TMC_SetInternalSerial(true);
-		gotStringViaGPIB = false;
-	}
-	
-	//TMC_SetInternalSerial(false);
 	
 	gpib_ren(false);
 	_delay_ms(100);
 	gpib_ren(true);
-	return gotStringViaGPIB;
+
+	return ok;
 }
 
 
