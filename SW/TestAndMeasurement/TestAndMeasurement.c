@@ -386,7 +386,7 @@ int main(void)
 	
 	/* apply settings from eeprom */
 	eeprom_busy_wait();	
-	gpib_set_readtermination(eeprom_read_byte(105));
+	gpib_set_readtermination(eeprom_read_byte((uint8_t*)105));
 	
 	
 	//LEDs_SetAllLEDs(LEDMASK_USB_NOTREADY);
@@ -419,7 +419,7 @@ int main(void)
 	}; /* Identify the GPIB Address of the connected GPIB device */
 	
 	eeprom_busy_wait();
-	if (eeprom_read_byte(104) != 0x01)
+	if (eeprom_read_byte((uint8_t*)104) != 0x01)
 	{
 		/* found a responsive GPIB address, now setup USB descriptor with *IDN? or ID? command response */
 		eeprom_busy_wait();
