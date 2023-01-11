@@ -614,6 +614,34 @@ void EVENT_USB_Device_ControlRequest(void)
 	uint8_t TMCRequestStatus = TMC_STATUS_SUCCESS;
 	uint8_t btag, statusReg;
 	
+	if ((USB_ControlRequest.bmRequestType & CONTROL_REQTYPE_TYPE) == REQTYPE_VENDOR
+        && (USB_ControlRequest.bmRequestType & CONTROL_REQTYPE_RECIPIENT) == REQREC_DEVICE)
+    {
+        if (USB_ControlRequest.bRequest == 0
+            && USB_ControlRequest.wIndex < INTERNAL_CONFIG_COUNT) {
+
+            if ((USB_ControlRequest.bmRequestType & CONTROL_REQTYPE_DIRECTION) == REQDIR_HOSTTODEVICE
+                && USB_ControlRequest.wLength == 0)
+            {
+                InternalConfigSet(USB_ControlRequest.wIndex, USB_ControlRequest.wValue);
+                Endpoint_ClearSETUP();
+                Endpoint_ClearStatusStage();
+            }
+
+            if ((USB_ControlRequest.bmRequestType & CONTROL_REQTYPE_DIRECTION) == REQDIR_DEVICETOHOST
+                && USB_ControlRequest.wLength == 1)
+            {
+                uint8_t value = InternalConfigGet(USB_ControlRequest.wIndex);
+
+                /* 0.5s timeout*/
+                timeout_start(50000);
+                Endpoint_ClearSETUP();
+                Endpoint_Write_8(value);
+                Endpoint_ClearIN();
+                Endpoint_ClearStatusStage();
+            }
+        }
+    }
 	
 	if ((USB_ControlRequest.wIndex == INTERFACE_ID_TestAndMeasurement
          && (USB_ControlRequest.bmRequestType & CONTROL_REQTYPE_RECIPIENT) == REQREC_INTERFACE)
