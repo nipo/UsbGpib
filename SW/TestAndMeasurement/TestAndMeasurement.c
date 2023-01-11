@@ -550,8 +550,10 @@ void EVENT_USB_Device_ControlRequest(void)
 	uint8_t btag, statusReg;
 	
 	
-	if ( ((USB_ControlRequest.wIndex == INTERFACE_ID_TestAndMeasurement) && ((USB_ControlRequest.bmRequestType & REQREC_INTERFACE)!=0)) ||
-	     (((USB_ControlRequest.wIndex == TMC_IN_EPADDR) || (USB_ControlRequest.wIndex == TMC_OUT_EPADDR)) && ((USB_ControlRequest.bmRequestType & REQREC_ENDPOINT)!=0))     )
+	if ((USB_ControlRequest.wIndex == INTERFACE_ID_TestAndMeasurement
+         && (USB_ControlRequest.bmRequestType & CONTROL_REQTYPE_RECIPIENT) == REQREC_INTERFACE)
+        || ((USB_ControlRequest.wIndex == TMC_IN_EPADDR || USB_ControlRequest.wIndex == TMC_OUT_EPADDR)
+          && (USB_ControlRequest.bmRequestType & CONTROL_REQTYPE_RECIPIENT) == REQREC_ENDPOINT))
 	{
 		/* Process TMC specific control requests */
 		switch (USB_ControlRequest.bRequest)
