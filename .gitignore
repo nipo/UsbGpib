@@ -1,0 +1,14 @@
+*.d
+*.o
+.DS_Store
+*bak
+*.bak
+*-bak
+*~
+*.pyc
+*.net
+*.xml
+*.rpt
+*-backups
+*.kicad_prl
+fp-info-cache
