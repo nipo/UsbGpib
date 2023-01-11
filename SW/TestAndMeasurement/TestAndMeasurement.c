@@ -540,6 +540,71 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 
 void TMC_resetstates(void);
 
+enum internal_config_index
+{
+    INTERNAL_CONFIG_AUTO_DETECT,
+    INTERNAL_CONFIG_LINE_TERMINATION,
+    INTERNAL_CONFIG_COUNT,
+};
+
+void InternalConfigSet(uint8_t key, uint8_t value)
+{
+    switch (key)
+	{
+    case INTERNAL_CONFIG_AUTO_DETECT:
+        eeprom_update_if_changed(104, value);
+        break;
+    case INTERNAL_CONFIG_LINE_TERMINATION:
+        switch (value)
+        {
+        case 0x01: /* \n */
+            eeprom_update_if_changed(105, '\n');
+            gpib_set_readtermination('\n');
+            break;
+        case 0x02: /* \r */
+            eeprom_update_if_changed(105, '\r');
+            gpib_set_readtermination('\r');
+            break;
+        default:
+            eeprom_update_if_changed(105, '\0');
+            gpib_set_readtermination('\0');
+            break;
+        }
+        break;
+	}
+}
+
+uint8_t InternalConfigGet(uint8_t key)
+{
+    uint8_t value = 0xff;
+	eeprom_busy_wait();
+
+    switch (key)
+	{
+    case INTERNAL_CONFIG_AUTO_DETECT:
+        value = eeprom_read_byte((uint8_t*)104);
+        break;
+
+    case INTERNAL_CONFIG_LINE_TERMINATION:
+        value = eeprom_read_byte((uint8_t*)105);
+        switch (value)
+        {
+        case '\n':
+            value = 1;
+            break;
+        case '\r':
+            value = 2;
+            break;
+        default:
+            value = 0;
+            break;
+        }
+        break;
+	}
+
+    return value;
+}
+
 /** Event handler for the USB_ControlRequest event. This is used to catch and process control requests sent to
  *  the device from the USB host before passing along unhandled control requests to the library for processing
  *  internally.
@@ -853,30 +918,8 @@ void ProcessInternalCommand(uint8_t* const Data, uint8_t Length)
 	
 	xx = charToval(Data[1])*16 + charToval(Data[2]);
 	yy = charToval(Data[3])*16 + charToval(Data[4]);
-	
-	switch (xx)
-	{
-		case 0x00: /* automatic detection y */
-			eeprom_update_if_changed(104, yy);
-			break;
-		case 0x01: /* select termination method */
-			switch (yy)
-			{
-				case 0x01: /* \n */
-					eeprom_update_if_changed(105, '\n');
-					gpib_set_readtermination('\n');
-					break;
-				case 0x02: /* \r */
-					eeprom_update_if_changed(105, '\r');
-					gpib_set_readtermination('\r');
-					break;
-				default:
-					eeprom_update_if_changed(105, '\0');
-					gpib_set_readtermination('\0');
-					break;
-			}
-			break;
-	}
+
+    InternalConfigSet(xx, yy);
 }
 
 void ProcessSentMessage(uint8_t* const Data, uint8_t Length, bool isFirstTransfer, bool isLastTransfer, gpibtimeout_t ptimeoutfunc)
